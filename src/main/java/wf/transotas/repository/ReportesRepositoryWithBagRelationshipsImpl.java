@@ -10,6 +10,7 @@ import javax.persistence.PersistenceContext;
 import org.hibernate.annotations.QueryHints;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import wf.transotas.domain.CasoText;
 import wf.transotas.domain.Reportes;
 
 /**
@@ -86,4 +87,22 @@ public class ReportesRepositoryWithBagRelationshipsImpl implements ReportesRepos
         Collections.sort(result, (o1, o2) -> Integer.compare(order.get(o1.getId()), order.get(o2.getId())));
         return result;
     }
+    //    List<Reportes> fetchCasos(List<CasoText> casos) {
+    //        HashMap<Object, Integer> order = new HashMap<>();
+    //
+    //        casos.stream().map(item -> entityManager.createQuery("select distinct reportes " +
+    //            "from Reportes reportes where caso_text_id =  :caso_text", Reportes.class).setParameter(""))
+    //
+    //        //IntStream.range(0, reportes.size()).forEach(index -> order.put(reportes.get(index).getId(), index));
+    //        List<Reportes> result = entityManager
+    //            .createQuery(
+    //                "select distinct reportes from Reportes reportes where caso_text_id =  :reportes",
+    //                Reportes.class
+    //            )
+    //            .setParameter("reportes", reportes)
+    //            .setHint(QueryHints.PASS_DISTINCT_THROUGH, false)
+    //            .getResultList();
+    //        Collections.sort(result, (o1, o2) -> Integer.compare(order.get(o1.getId()), order.get(o2.getId())));
+    //        return result;
+    //    }
 }

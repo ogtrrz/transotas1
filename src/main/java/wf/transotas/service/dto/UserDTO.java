@@ -14,6 +14,8 @@ public class UserDTO implements Serializable {
 
     private String login;
 
+    private String jwt;
+
     public UserDTO() {
         // Empty constructor needed for Jackson.
     }
@@ -38,6 +40,14 @@ public class UserDTO implements Serializable {
 
     public void setLogin(String login) {
         this.login = login;
+    }
+
+    public String getJwt() {
+        return jwt;
+    }
+
+    public void setJwt(String jwt) {
+        this.jwt = jwt;
     }
 
     // prettier-ignore

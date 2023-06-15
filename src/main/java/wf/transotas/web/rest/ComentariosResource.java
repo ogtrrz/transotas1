@@ -7,6 +7,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,16 +16,23 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tech.jhipster.web.util.HeaderUtil;
 import tech.jhipster.web.util.PaginationUtil;
 import tech.jhipster.web.util.ResponseUtil;
 import wf.transotas.repository.ComentariosRepository;
+import wf.transotas.security.AuthoritiesConstants;
+import wf.transotas.security.SecurityUtils;
 import wf.transotas.service.ComentariosQueryService;
 import wf.transotas.service.ComentariosService;
+import wf.transotas.service.InformacionService;
+import wf.transotas.service.ReportesService;
 import wf.transotas.service.criteria.ComentariosCriteria;
 import wf.transotas.service.dto.ComentariosDTO;
+import wf.transotas.service.dto.InformacionDTO;
+import wf.transotas.service.dto.ReportesDTO;
 import wf.transotas.web.rest.errors.BadRequestAlertException;
 
 /**
@@ -47,14 +55,22 @@ public class ComentariosResource {
 
     private final ComentariosQueryService comentariosQueryService;
 
+    private final ReportesService reportesService;
+
+    private final InformacionService informacionService;
+
     public ComentariosResource(
         ComentariosService comentariosService,
         ComentariosRepository comentariosRepository,
-        ComentariosQueryService comentariosQueryService
+        ComentariosQueryService comentariosQueryService,
+        ReportesService reportesService,
+        InformacionService informacionService
     ) {
         this.comentariosService = comentariosService;
         this.comentariosRepository = comentariosRepository;
         this.comentariosQueryService = comentariosQueryService;
+        this.reportesService = reportesService;
+        this.informacionService = informacionService;
     }
 
     /**
@@ -223,5 +239,87 @@ public class ComentariosResource {
         Page<ComentariosDTO> page = comentariosService.search(query, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
+    }
+
+    //Agregados
+
+    @DeleteMapping("/comentarios2/{idComentario}/{idReporte}")
+    public ResponseEntity<ComentariosDTO> deleteComentarios(@PathVariable Long idComentario, @PathVariable Long idReporte) {
+        log.debug("REST request to delete Comentarios idComentario: {} idReporte: {}", idComentario, idReporte);
+
+        Optional<ComentariosDTO> comentario = comentariosService.findOne(idComentario);
+
+        Optional<ReportesDTO> reporteDTOOptional = reportesService.findOne(idReporte);
+        if (reporteDTOOptional.isPresent()) {
+            ReportesDTO reporteDTO = reporteDTOOptional.get();
+            Set<ComentariosDTO> comentarios = reporteDTO.getComentarios();
+            if (comentarios.contains(comentario.get())) {
+                comentarios.remove(comentario.get());
+                reporteDTO.setComentarios(comentarios);
+                InformacionDTO informacionDTO = reporteDTO.getInformacion();
+                informacionDTO.setComentarios(comentarios.size());
+                informacionService.partialUpdate(informacionDTO);
+                reportesService.partialUpdate(reporteDTO);
+                comentariosService.delete(idComentario);
+            }
+        }
+
+        return ResponseEntity
+            .noContent()
+            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, idComentario.toString()))
+            .build();
+        //        return ResponseEntity.ok().body(comentario.get());
+    }
+
+    //Modificado Editar comentario con usuario
+
+    @PatchMapping(value = "/comentarios2/{id}", consumes = { "application/json", "application/merge-patch+json" })
+    //@PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
+    public ResponseEntity<ComentariosDTO> partialUpdateComentarios2(
+        @PathVariable(value = "id", required = false) final Long id,
+        @RequestBody ComentariosDTO comentariosDTO
+    ) throws URISyntaxException {
+        log.debug("REST request to partial update Comentarios 283 partially : {}, {}", id, comentariosDTO);
+
+        if (comentariosDTO.getId() == null) {
+            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+        }
+        log.debug("REST request to partial update Comentarios 289 partially : {}, {}", id, comentariosDTO);
+        if (!Objects.equals(id, comentariosDTO.getId())) {
+            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
+        }
+        log.debug("REST request to partial update Comentarios 293 partially : {}, {}", id, comentariosDTO);
+        if (!comentariosRepository.existsById(id)) {
+            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
+        }
+        log.debug("REST request to partial update Comentarios 297 partially : {}, {}", id, comentariosDTO);
+        String login = "Anonimo";
+        Optional<String> user = SecurityUtils.getCurrentUserLogin();
+        if (user.isPresent()) {
+            login = user.get();
+            if (login.contains("anonymousUser")) {
+                login = "Anonimo";
+            }
+        }
+        int iend = login.indexOf("@");
+        if (iend != -1) {
+            login = login.substring(0, iend); //this will give abc
+        }
+
+        log.debug("REST request to partial update Comentarios partially : {}, {}, {}", id, comentariosDTO, login);
+
+        Optional<ComentariosDTO> comentariosDTO1 = comentariosService.findOne(comentariosDTO.getId());
+        if (comentariosDTO1.isPresent()) {
+            if (!comentariosDTO1.get().getAutor().contains(login)) {
+                throw new BadRequestAlertException("User not creator", ENTITY_NAME, "idnotfound");
+            }
+        }
+        comentariosDTO.setAutor(login);
+        Optional<ComentariosDTO> result = comentariosService.partialUpdate(comentariosDTO);
+
+        return ResponseUtil.wrapOrNotFound(
+            result,
+            HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, comentariosDTO.getId().toString())
+        );
     }
 }

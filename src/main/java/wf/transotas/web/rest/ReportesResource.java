@@ -1,13 +1,12 @@
 package wf.transotas.web.rest;
 
-import static org.elasticsearch.index.query.QueryBuilders.*;
-
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.StreamSupport;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,11 +20,18 @@ import tech.jhipster.web.util.HeaderUtil;
 import tech.jhipster.web.util.PaginationUtil;
 import tech.jhipster.web.util.ResponseUtil;
 import wf.transotas.repository.ReportesRepository;
+import wf.transotas.security.SecurityUtils;
+import wf.transotas.service.ComentariosService;
+import wf.transotas.service.InformacionService;
 import wf.transotas.service.ReportesQueryService;
 import wf.transotas.service.ReportesService;
 import wf.transotas.service.criteria.ReportesCriteria;
+import wf.transotas.service.dto.ComentariosDTO;
+import wf.transotas.service.dto.InformacionDTO;
 import wf.transotas.service.dto.ReportesDTO;
 import wf.transotas.web.rest.errors.BadRequestAlertException;
+
+//import org.springframework.security.core.context.SecurityContext;
 
 /**
  * REST controller for managing {@link wf.transotas.domain.Reportes}.
@@ -47,14 +53,22 @@ public class ReportesResource {
 
     private final ReportesQueryService reportesQueryService;
 
+    private final ComentariosService comentariosService;
+
+    private final InformacionService informacionService;
+
     public ReportesResource(
         ReportesService reportesService,
         ReportesRepository reportesRepository,
-        ReportesQueryService reportesQueryService
+        ReportesQueryService reportesQueryService,
+        ComentariosService comentariosService,
+        InformacionService informacionService
     ) {
         this.reportesService = reportesService;
         this.reportesRepository = reportesRepository;
         this.reportesQueryService = reportesQueryService;
+        this.comentariosService = comentariosService;
+        this.informacionService = informacionService;
     }
 
     /**
@@ -80,7 +94,7 @@ public class ReportesResource {
     /**
      * {@code PUT  /reportes/:id} : Updates an existing reportes.
      *
-     * @param id the id of the reportesDTO to save.
+     * @param id          the id of the reportesDTO to save.
      * @param reportesDTO the reportesDTO to update.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated reportesDTO,
      * or with status {@code 400 (Bad Request)} if the reportesDTO is not valid,
@@ -114,7 +128,7 @@ public class ReportesResource {
     /**
      * {@code PATCH  /reportes/:id} : Partial updates given fields of an existing reportes, field will ignore if it is null
      *
-     * @param id the id of the reportesDTO to save.
+     * @param id          the id of the reportesDTO to save.
      * @param reportesDTO the reportesDTO to update.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated reportesDTO,
      * or with status {@code 400 (Bad Request)} if the reportesDTO is not valid,
@@ -159,9 +173,20 @@ public class ReportesResource {
         ReportesCriteria criteria,
         @org.springdoc.api.annotations.ParameterObject Pageable pageable
     ) {
-        log.debug("REST request to get Reportes by criteria: {}", criteria);
+        String login = "Anonimo";
+        Optional<String> user = SecurityUtils.getCurrentUserLogin();
+        if (user.isPresent()) {
+            login = user.get();
+            //anonymousUser
+        }
+        log.debug("REST request to get Reportes by criteria: {} login: {}", criteria, login);
         Page<ReportesDTO> page = reportesQueryService.findByCriteria(criteria, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+        String totalCount = headers.getFirst("X-Total-Count");
+        log.debug("REST request to get Reportes by totalCount: {} totalPages: {}", totalCount);
+
+        page.stream().forEach(item -> item.setExtra10(totalCount));
+
         return ResponseEntity.ok().headers(headers).body(page.getContent());
     }
 
@@ -183,10 +208,20 @@ public class ReportesResource {
      * @param id the id of the reportesDTO to retrieve.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the reportesDTO, or with status {@code 404 (Not Found)}.
      */
+
     @GetMapping("/reportes/{id}")
     public ResponseEntity<ReportesDTO> getReportes(@PathVariable Long id) {
-        log.debug("REST request to get Reportes : {}", id);
+        String login = "Anonimo";
+        Optional<String> user = SecurityUtils.getCurrentUserLogin();
+        if (user.isPresent()) {
+            login = user.get();
+            System.out.println("login: " + login);
+            //anonymousUser
+        }
+
+        log.debug("REST request to get Reportes : {}; Usuario : {}", id, login);
         Optional<ReportesDTO> reportesDTO = reportesService.findOne(id);
+
         return ResponseUtil.wrapOrNotFound(reportesDTO);
     }
 
@@ -210,7 +245,7 @@ public class ReportesResource {
      * {@code SEARCH  /_search/reportes?query=:query} : search for the reportes corresponding
      * to the query.
      *
-     * @param query the query of the reportes search.
+     * @param query    the query of the reportes search.
      * @param pageable the pagination information.
      * @return the result of the search.
      */
@@ -223,5 +258,64 @@ public class ReportesResource {
         Page<ReportesDTO> page = reportesService.search(query, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
+    }
+
+    //handle post Comentario
+    @PatchMapping(value = "/reportes2/{id}", consumes = { "application/json", "application/merge-patch+json" })
+    public ResponseEntity<ReportesDTO> partialUpdateReportes2(
+        @PathVariable(value = "id", required = false) final Long id,
+        @RequestBody ReportesDTO reportesDTO
+    ) throws URISyntaxException {
+        log.debug("REST request to partial update Reportes partially : {}, {}", id, reportesDTO);
+
+        if (reportesDTO.getId() == null) {
+            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+        }
+        if (!Objects.equals(id, reportesDTO.getId())) {
+            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
+        }
+
+        if (!reportesRepository.existsById(id)) {
+            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
+        }
+
+        String login = "Anonimo";
+        Optional<String> user = SecurityUtils.getCurrentUserLogin();
+        if (user.isPresent()) {
+            login = user.get();
+            if (login.contains("anonymousUser")) {
+                login = "Anonimo";
+            }
+        }
+
+        log.debug("REST request to login : {}", login);
+        int iend = login.indexOf("@");
+        if (iend != -1) {
+            login = login.substring(0, iend); //this will give abc
+        }
+
+        Optional<ReportesDTO> findReporteDTO = reportesService.findOne(reportesDTO.getId());
+        if (findReporteDTO.isPresent()) {
+            ReportesDTO resultReporteDTO = findReporteDTO.get();
+            Set<ComentariosDTO> comentarios = resultReporteDTO.getComentarios();
+            Optional<ComentariosDTO> nuevoComentario = reportesDTO.getComentarios().stream().findFirst();
+            if (nuevoComentario.isPresent()) {
+                ComentariosDTO nuevoComentarioDTO = nuevoComentario.get();
+                nuevoComentarioDTO.setExtra2(String.valueOf(Instant.now()));
+                nuevoComentarioDTO.setAutor(login);
+                ComentariosDTO comentarioDTO = comentariosService.save(nuevoComentarioDTO);
+                if (comentarios.add(comentarioDTO)) {
+                    reportesDTO.setComentarios(comentarios);
+                    InformacionDTO informacionDTO = resultReporteDTO.getInformacion();
+                    informacionDTO.setComentarios(comentarios.size());
+                    informacionService.partialUpdate(informacionDTO);
+                }
+            }
+        }
+        Optional<ReportesDTO> result = reportesService.partialUpdate(reportesDTO);
+        return ResponseUtil.wrapOrNotFound(
+            result,
+            HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, reportesDTO.getId().toString())
+        );
     }
 }

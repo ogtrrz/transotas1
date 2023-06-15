@@ -30,7 +30,7 @@ public interface ReportesMapper extends EntityMapper<ReportesDTO, Reportes> {
     Reportes toEntity(ReportesDTO reportesDTO);
 
     @Named("informacionId")
-    @BeanMapping(ignoreByDefault = true)
+    @BeanMapping(ignoreByDefault = false)
     @Mapping(target = "id", source = "id")
     InformacionDTO toDtoInformacionId(Informacion informacion);
 
@@ -40,7 +40,7 @@ public interface ReportesMapper extends EntityMapper<ReportesDTO, Reportes> {
     CasoTextDTO toDtoCasoTextId(CasoText casoText);
 
     @Named("categorysId")
-    @BeanMapping(ignoreByDefault = true)
+    @BeanMapping(ignoreByDefault = false)
     @Mapping(target = "id", source = "id")
     CategorysDTO toDtoCategorysId(Categorys categorys);
 
@@ -50,7 +50,7 @@ public interface ReportesMapper extends EntityMapper<ReportesDTO, Reportes> {
     }
 
     @Named("comentariosId")
-    @BeanMapping(ignoreByDefault = true)
+    @BeanMapping(ignoreByDefault = false)
     @Mapping(target = "id", source = "id")
     ComentariosDTO toDtoComentariosId(Comentarios comentarios);
 

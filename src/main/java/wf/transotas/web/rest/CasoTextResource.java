@@ -7,6 +7,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,13 +19,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import tech.jhipster.service.filter.LongFilter;
 import tech.jhipster.web.util.HeaderUtil;
 import tech.jhipster.web.util.PaginationUtil;
 import tech.jhipster.web.util.ResponseUtil;
 import wf.transotas.repository.CasoTextRepository;
 import wf.transotas.service.CasoTextService;
+import wf.transotas.service.ReportesQueryService;
+import wf.transotas.service.criteria.ReportesCriteria;
 import wf.transotas.service.dto.CasoTextDTO;
+import wf.transotas.service.dto.ReportesDTO;
 import wf.transotas.web.rest.errors.BadRequestAlertException;
+
+//import wf.transotas.service.ReportesQueryService
 
 /**
  * REST controller for managing {@link wf.transotas.domain.CasoText}.
@@ -44,9 +51,21 @@ public class CasoTextResource {
 
     private final CasoTextRepository casoTextRepository;
 
-    public CasoTextResource(CasoTextService casoTextService, CasoTextRepository casoTextRepository) {
+    private final ReportesQueryService reportesQueryService;
+
+    //    public CasoTextResource(CasoTextService casoTextService, CasoTextRepository casoTextRepository) {
+    //        this.casoTextService = casoTextService;
+    //        this.casoTextRepository = casoTextRepository;
+    //    }
+
+    public CasoTextResource(
+        CasoTextService casoTextService,
+        CasoTextRepository casoTextRepository,
+        ReportesQueryService reportesQueryService
+    ) {
         this.casoTextService = casoTextService;
         this.casoTextRepository = casoTextRepository;
+        this.reportesQueryService = reportesQueryService;
     }
 
     /**
@@ -199,5 +218,41 @@ public class CasoTextResource {
         Page<CasoTextDTO> page = casoTextService.search(query, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
+    }
+
+    // Obtener los Reportes de los casos encontrados en el search /api/_search2/caso-texts?query=telmex
+    //TODO El indice del elasticsearch debe estar sincronizado
+    @GetMapping("/_search2/caso-texts")
+    public ResponseEntity<List<ReportesDTO>> searchCasoTexts2(
+        @RequestParam String query,
+        @org.springdoc.api.annotations.ParameterObject Pageable pageable
+    ) {
+        log.debug("REST request to search for a page of CasoTexts2 for query {}", query);
+        Page<CasoTextDTO> page = casoTextService.search(query, pageable);
+        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+
+        List<ReportesDTO> reportes = page
+            .stream()
+            .map(item -> {
+                LongFilter longFilter = new LongFilter();
+                longFilter.setEquals(item.getId());
+                ReportesCriteria reportesCriteria = new ReportesCriteria();
+                reportesCriteria.setCasoTextId(longFilter);
+                List<ReportesDTO> reporte = reportesQueryService.findByCriteria(reportesCriteria);
+                Optional<ReportesDTO> reporteOpt = reporte.stream().findFirst();
+                if (reporteOpt.isPresent()) {
+                    ReportesDTO rep = reporteOpt.get();
+                    rep.setExtra10(headers.getFirst("X-Total-Count"));
+                    return rep;
+                }
+                return null;
+            })
+            .filter(x -> x != null)
+            .collect(Collectors.toList());
+
+        //TODO implementar Pageable en los resultados del search
+        //        Page<ReportesDTO> reportesPage = new PageImpl<User>(users, pageable, users.size());
+
+        return ResponseEntity.ok().headers(headers).body(reportes);
     }
 }

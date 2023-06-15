@@ -13,6 +13,7 @@ import wf.transotas.domain.CasoText;
 import wf.transotas.repository.CasoTextRepository;
 import wf.transotas.repository.search.CasoTextSearchRepository;
 import wf.transotas.service.dto.CasoTextDTO;
+import wf.transotas.service.dto.ReportesDTO;
 import wf.transotas.service.mapper.CasoTextMapper;
 
 /**
@@ -142,4 +143,17 @@ public class CasoTextService {
         log.debug("Request to search for a page of CasoTexts for query {}", query);
         return casoTextSearchRepository.search(query, pageable).map(casoTextMapper::toDto);
     }
+    //=====================================================
+
+    //    @Transactional(readOnly = true)
+    //    public Page<CasoTextDTO> search2(String query, Pageable pageable) {
+    //        log.debug("Request to search for a page of CasoTexts for query {}", query);
+    //        ReportesService reportesService = null;
+    //        Optional<ReportesDTO> reportesDTO = reportesService.findOne(id);
+    //        Page<CasoTextDTO> regreso = casoTextSearchRepository.search(query, pageable).map(casoTextMapper::toDto);
+    //        regreso.stream().map(item -> item.get);
+    //
+    //        return regreso;
+    ////        return casoTextSearchRepository.search(query, pageable).map(casoTextMapper::toDto);
+    //    }
 }

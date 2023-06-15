@@ -2,16 +2,26 @@ package wf.transotas.service;
 
 import static org.elasticsearch.index.query.QueryBuilders.*;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tech.jhipster.service.filter.StringFilter;
+import wf.transotas.domain.Informacion;
 import wf.transotas.domain.Reportes;
 import wf.transotas.repository.ReportesRepository;
 import wf.transotas.repository.search.ReportesSearchRepository;
+import wf.transotas.service.criteria.CategorysCriteria;
+import wf.transotas.service.dto.CasoTextDTO;
+import wf.transotas.service.dto.CategorysDTO;
+import wf.transotas.service.dto.InformacionDTO;
 import wf.transotas.service.dto.ReportesDTO;
 import wf.transotas.service.mapper.ReportesMapper;
 
@@ -30,14 +40,26 @@ public class ReportesService {
 
     private final ReportesSearchRepository reportesSearchRepository;
 
+    private final InformacionService informacionService;
+
+    private final CasoTextService casoTextService;
+
+    private final CategorysQueryService categorysQueryService;
+
     public ReportesService(
         ReportesRepository reportesRepository,
         ReportesMapper reportesMapper,
-        ReportesSearchRepository reportesSearchRepository
+        ReportesSearchRepository reportesSearchRepository,
+        InformacionService informacionService,
+        CasoTextService casoTextService,
+        CategorysQueryService categorysQueryService
     ) {
         this.reportesRepository = reportesRepository;
         this.reportesMapper = reportesMapper;
         this.reportesSearchRepository = reportesSearchRepository;
+        this.informacionService = informacionService;
+        this.casoTextService = casoTextService;
+        this.categorysQueryService = categorysQueryService;
     }
 
     /**
@@ -46,9 +68,42 @@ public class ReportesService {
      * @param reportesDTO the entity to save.
      * @return the persisted entity.
      */
+
+    //TODO en el post agregar informacion en 0 automatico y agregar el caso
     public ReportesDTO save(ReportesDTO reportesDTO) {
         log.debug("Request to save Reportes : {}", reportesDTO);
+        InformacionDTO informacionDto = new InformacionDTO();
+        informacionDto.setComentarios(0);
+        informacionDto.setVistas(0);
+        informacionDto.setRating(0);
+        informacionDto = informacionService.save(informacionDto);
+        reportesDTO.setInformacion(informacionDto);
+
+        CasoTextDTO casoTextDTO = new CasoTextDTO();
+        casoTextDTO.setDescripcion(reportesDTO.getCasoText().getDescripcion());
+        casoTextDTO = casoTextService.save(casoTextDTO);
+        reportesDTO.setCasoText(casoTextDTO);
+
+        //        citeria
+        Set<CategorysDTO> categorys = reportesDTO.getCategorys();
+        Set<CategorysDTO> categorysId = categorys
+            .stream()
+            .map(item -> {
+                StringFilter stringFilter = new StringFilter();
+                stringFilter.setEquals(item.getCategoria());
+                CategorysCriteria criteria = new CategorysCriteria();
+                criteria.setCategoria(stringFilter);
+                List<CategorysDTO> listCategorysDTO = categorysQueryService.findByCriteria(criteria);
+                if (listCategorysDTO.stream().findFirst().isPresent()) {
+                    return listCategorysDTO.stream().findFirst().get();
+                }
+                return null;
+            })
+            .filter(x -> x != null)
+            .collect(Collectors.toSet());
+        reportesDTO.setCategorys(categorysId);
         Reportes reportes = reportesMapper.toEntity(reportesDTO);
+
         reportes = reportesRepository.save(reportes);
         ReportesDTO result = reportesMapper.toDto(reportes);
         reportesSearchRepository.index(reportes);

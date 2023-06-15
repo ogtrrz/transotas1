@@ -1,13 +1,11 @@
 package wf.transotas.web.rest;
 
-import static org.elasticsearch.index.query.QueryBuilders.*;
-
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.*;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.List;
+import java.util.Optional;
 import javax.validation.Valid;
 import javax.validation.constraints.Pattern;
 import org.slf4j.Logger;
@@ -20,6 +18,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tech.jhipster.web.util.HeaderUtil;
@@ -29,12 +31,15 @@ import wf.transotas.config.Constants;
 import wf.transotas.domain.User;
 import wf.transotas.repository.UserRepository;
 import wf.transotas.security.AuthoritiesConstants;
+import wf.transotas.security.jwt.JWTFilter;
+import wf.transotas.security.jwt.TokenProvider;
 import wf.transotas.service.MailService;
 import wf.transotas.service.UserService;
 import wf.transotas.service.dto.AdminUserDTO;
 import wf.transotas.web.rest.errors.BadRequestAlertException;
 import wf.transotas.web.rest.errors.EmailAlreadyUsedException;
 import wf.transotas.web.rest.errors.LoginAlreadyUsedException;
+import wf.transotas.web.rest.vm.LoginVM;
 
 /**
  * REST controller for managing users.
@@ -91,10 +96,22 @@ public class UserResource {
 
     private final MailService mailService;
 
-    public UserResource(UserService userService, UserRepository userRepository, MailService mailService) {
+    private final TokenProvider tokenProvider;
+
+    private final AuthenticationManagerBuilder authenticationManagerBuilder;
+
+    public UserResource(
+        UserService userService,
+        UserRepository userRepository,
+        MailService mailService,
+        TokenProvider tokenProvider,
+        AuthenticationManagerBuilder authenticationManagerBuilder
+    ) {
         this.userService = userService;
         this.userRepository = userRepository;
         this.mailService = mailService;
+        this.tokenProvider = tokenProvider;
+        this.authenticationManagerBuilder = authenticationManagerBuilder;
     }
 
     /**
@@ -106,7 +123,7 @@ public class UserResource {
      *
      * @param userDTO the user to create.
      * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new user, or with status {@code 400 (Bad Request)} if the login or email is already in use.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
+     * @throws URISyntaxException       if the Location URI syntax is incorrect.
      * @throws BadRequestAlertException {@code 400 (Bad Request)} if the login or email is already in use.
      */
     @PostMapping("/users")
@@ -208,4 +225,33 @@ public class UserResource {
         userService.deleteUser(login);
         return ResponseEntity.noContent().headers(HeaderUtil.createAlert(applicationName, "userManagement.deleted", login)).build();
     }
+
+    // Servicio de Nuevo usuario Oauth
+    //TODO get usuario o crea nuevo funcionamiento con nextauth (probar)
+    @PostMapping("/users2")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<UserJWTController.JWTToken> createUser2(@Valid @RequestBody AdminUserDTO userDTO) throws URISyntaxException {
+        log.debug("REST request to save User : {}", userDTO);
+        User user;
+        if (userRepository.findOneByLogin(userDTO.getLogin().toLowerCase()).isPresent()) {
+            user = userRepository.findOneByLogin(userDTO.getLogin().toLowerCase()).get();
+        } else {
+            user = userService.createUser2(userDTO);
+        }
+        LoginVM loginVM = new LoginVM();
+        loginVM.setUsername(user.getLogin()); //userDTO.getLogin());
+        loginVM.setPassword("12345678");
+        loginVM.setRememberMe(true);
+        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+            loginVM.getUsername(),
+            loginVM.getPassword()
+        );
+        Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String jwt = tokenProvider.createToken(authentication, loginVM.isRememberMe());
+        HttpHeaders httpHeaders = new HttpHeaders();
+        httpHeaders.add(JWTFilter.AUTHORIZATION_HEADER, "Bearer " + jwt);
+        return new ResponseEntity<>(new UserJWTController.JWTToken(jwt), httpHeaders, HttpStatus.OK);
+    }
+    //TODO resolver tema categorias debe ser uno a muchos y cada categoria tiene un nuevo id
 }

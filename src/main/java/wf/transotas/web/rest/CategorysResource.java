@@ -224,4 +224,9 @@ public class CategorysResource {
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
     }
+    //TODO hacer un servicio que reciba varias categorias en array y responda con un array de id
+    //    http://localhost:8080/api/reportes?casoTextId.equals=104220
+    //    http://localhost:8080/api/_search/caso-texts?query=telmex
+    // TODO seguridad editar borrar comentario
+
 }
